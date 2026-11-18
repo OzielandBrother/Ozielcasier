@@ -2,6 +2,13 @@
 <html lang="id">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1E3A5F">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Oziel">
 <title>Oziel and Brother</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
@@ -264,7 +271,7 @@ var S = {
   members:{}, trx:[], exp:[], ex:{tgl:dayKey(new Date()), kategori:'Gaji & bagi hasil', oleh:'', ket:'', jumlah:''},
   cart:{items:{}, hargaIn:{}, memberId:null, kapster:KAPSTER[0], metode:'tunai', tukar:0, bayar:''},
   mq:'', ml:'', cek:'', range:'hari',
-  role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
+  mf:{nama:'',jumlah:''}, mErr:'', canInstall:false, role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
   qKap:'', q:[], qDate:dayKey(new Date()), qf:{nama:'', hp:'', kapster:'', ket:'', jam:''}, qErr:'',
   modal:null, form:{}, formErr:'', exErr:'', saving:false, focusModal:false
 };
@@ -379,6 +386,9 @@ function calcCart(){
     if(bad) invalid = true;
     return {id:id, nama:it.nama, harga:unit, jenis:it.jenis, qty:q, sub:unit*q, hm:hm, mulai:!!it.mulai, bad:bad, dasar:it.harga};
   });
+  (c.manual||[]).forEach(function(m){
+    items.push({id:'manual', key:m.id, nama:m.nama, harga:m.harga, jenis:'produk', qty:1, sub:m.harga, hm:false, mulai:false, bad:false, dasar:m.harga, manual:true});
+  });
   var subtotal = sum(items,function(i){ return i.sub; });
   var subLayanan = sum(items.filter(function(i){ return i.jenis==='layanan' && !i.hm; }),function(i){ return i.sub; });
   var tier = m ? tierOf(m.totalBelanja||0) : null;
@@ -398,7 +408,7 @@ function invoiceNo(d){
   var n = S.trx.filter(function(t){ return dayKey(t.at)===key; }).length + 1;
   return 'RB-'+String(d.getFullYear()).slice(2)+pad2(d.getMonth()+1)+pad2(d.getDate())+'-'+String(n).padStart(3,'0');
 }
-function resetCart(){ S.cart = {items:{}, hargaIn:{}, memberId:null, kapster:S.cart.kapster, metode:'tunai', tukar:0, bayar:''}; S.mq=''; }
+function resetCart(){ S.cart = {items:{}, hargaIn:{}, manual:[], memberId:null, kapster:S.cart.kapster, metode:'tunai', tukar:0, bayar:''}; S.mq=''; }
 
 function bayarSekarang(){
   var k = calcCart();
@@ -516,7 +526,26 @@ function exportCsv(){
 }
 
 /* ---------- Tampilan ---------- */
-function statusPill(){ if(S.role!=='admin') return ''; return statusPill0()+' <button class="btn small" data-act="keluar">Keluar</button>'; }
+var deferredInstall = null;
+function isStandalone(){ return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone===true; }
+function isIos(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferredInstall=e; S.canInstall=true; render(); });
+window.addEventListener('appinstalled',function(){ deferredInstall=null; S.canInstall=false; render(); });
+function pasangApp(){
+  if(deferredInstall){
+    deferredInstall.prompt();
+    deferredInstall.userChoice.then(function(){ deferredInstall=null; S.canInstall=false; render(); });
+  } else if(isIos()){
+    toast('Di Safari: ketuk tombol Bagikan, lalu pilih Tambah ke Layar Utama.',6000);
+  } else {
+    toast('Buka menu browser (titik tiga), lalu pilih Instal aplikasi atau Tambahkan ke layar utama.',6000);
+  }
+}
+function statusPill(){
+  if(S.role!=='admin') return '';
+  var pasang = isStandalone() ? '' : ' <button class="btn small" data-act="pasang">Pasang aplikasi</button>';
+  return statusPill0()+pasang+' <button class="btn small" data-act="keluar">Keluar</button>';
+}
 function statusPill0(){
   if(S.dbErr) return '<span class="status bad">Penyimpanan tidak bisa diakses</span>';
   if(S.mode==='loading' || S.loading) return '<span class="status warn">Memuat data…</span>';
@@ -573,6 +602,14 @@ function priceInput(i){
   return '<label class="f" style="margin-top:6px">Harga (mulai '+rp(i.dasar)+')<input type="text" inputmode="numeric" id="harga-'+i.id+'" data-in="harga" data-id="'+i.id+'" data-end="1" value="'+esc(raw?nf.format(parseInt(raw,10)||0):'')+'" placeholder="'+nf.format(i.dasar)+'" autocomplete="off"></label>'+
     (i.bad?'<span class="err small">Harga tidak boleh di bawah '+rp(i.dasar)+'.</span>':'');
 }
+function manualCard(){
+  var f = S.mf;
+  return '<div class="card pad stack"><h2>Nominal manual</h2><div class="formgrid">'+
+    '<label class="f">Keterangan (opsional)<input type="text" id="m-nama" data-m="nama" value="'+esc(f.nama)+'" placeholder="Contoh: Layanan lain" autocomplete="off"></label>'+
+    '<label class="f">Nominal (Rp)<input type="text" inputmode="numeric" id="m-jumlah" data-m="jumlah" data-end="1" value="'+esc(f.jumlah?nf.format(parseInt(f.jumlah,10)):'')+'" placeholder="0" autocomplete="off"></label></div>'+
+    (S.mErr?'<p class="err" role="alert">'+esc(S.mErr)+'</p>':'')+
+    '<div><button class="btn" data-act="m-tambah">Tambah ke keranjang</button></div></div>';
+}
 function viewKasir(){
   var k = calcCart();
   var list = CATALOG.filter(function(c){ return S.filter==='semua' || c.grup===S.filter; });
@@ -589,7 +626,7 @@ function viewKasir(){
 
   var cartItems = k.items.length ? k.items.map(function(i){
     return '<div class="item"><div><div style="font-weight:600">'+esc(i.nama)+'</div><div class="small muted num">'+rp(i.harga)+' × '+i.qty+(i.hm?' · harga member':'')+'</div>'+priceInput(i)+'</div>'+
-      '<div class="qtyctl"><button data-act="dec" data-id="'+i.id+'" aria-label="Kurangi '+esc(i.nama)+'">−</button><span class="num">'+i.qty+'</span><button data-act="inc" data-id="'+i.id+'" aria-label="Tambah '+esc(i.nama)+'">+</button></div>'+
+      (i.manual ? '<button class="btn small danger" data-act="m-hapus" data-id="'+esc(i.key)+'">Hapus</button>' : '<div class="qtyctl"><button data-act="dec" data-id="'+i.id+'" aria-label="Kurangi '+esc(i.nama)+'">−</button><span class="num">'+i.qty+'</span><button data-act="inc" data-id="'+i.id+'" aria-label="Tambah '+esc(i.nama)+'">+</button></div>')+
       '<div class="num small muted">Subtotal</div><div class="num" style="text-align:right;font-weight:600">'+rp(i.sub)+'</div></div>';
   }).join('') : '<div class="empty"><strong>Keranjang kosong</strong>Pilih layanan atau produk dari daftar.</div>';
 
@@ -629,7 +666,7 @@ function viewKasir(){
   return '<section class="kasir"><div class="stack">'+
     '<div class="card pad"><h2 style="margin-bottom:10px">Member</h2>'+memberPicker(k)+'</div>'+
     '<div class="card pad"><div class="row between wrapx"><h2>Layanan &amp; produk</h2><div class="chips">'+chips+'</div></div><div class="tiles">'+tiles+'</div></div>'+
-    '</div>'+cart+'</section>'+
+    manualCard()+'</div>'+cart+'</section>'+
     '<div class="cartbar"><div><div class="small muted">'+k.count+' item</div><div class="tot num">'+rp(k.total)+'</div></div><button class="btn primary" data-act="to-cart">Lihat keranjang</button></div>';
 }
 
@@ -930,10 +967,10 @@ function render(){
     }
   }
 }
-function toast(msg){
+function toast(msg,ms){
   var box = document.getElementById('toast'), d = document.createElement('div');
   d.textContent = msg; box.appendChild(d);
-  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); }, 2600);
+  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); }, ms||2600);
 }
 function openModal(m){ S.modal=m; S.formErr=''; S.focusModal=true; render(); }
 function closeModal(){ S.modal=null; S.form={}; S.formErr=''; render(); }
@@ -1053,7 +1090,7 @@ var ACTIONS = {
   add:function(d){ var q=S.cart.items[d.id]||0; if(q<99) S.cart.items[d.id]=q+1; render(); },
   inc:function(d){ var q=S.cart.items[d.id]||0; if(q<99) S.cart.items[d.id]=q+1; render(); },
   dec:function(d){ var q=(S.cart.items[d.id]||0)-1; if(q<=0){ delete S.cart.items[d.id]; delete S.cart.hargaIn[d.id]; } else S.cart.items[d.id]=q; render(); },
-  kosong:function(){ S.cart.items={}; S.cart.hargaIn={}; S.cart.tukar=0; S.cart.bayar=''; render(); },
+  kosong:function(){ S.cart.items={}; S.cart.hargaIn={}; S.cart.manual=[]; S.cart.tukar=0; S.cart.bayar=''; render(); },
   filter:function(d){ S.filter=d.v; render(); },
   'pilih-member':function(d){ S.cart.memberId=d.id; S.cart.tukar=0; S.mq=''; render(); },
   'ganti-member':function(){ S.cart.memberId=null; S.cart.tukar=0; render(); },
@@ -1098,6 +1135,14 @@ var ACTIONS = {
   'simpan-ex':simpanEx,
   'q-kap':function(d){ S.qKap=d.v; render(); },
   nav:function(d,el,e){ e.preventDefault(); go(d.v); },
+  'm-tambah':function(){
+    var j = parseInt(S.mf.jumlah,10)||0;
+    if(j<=0){ S.mErr='Isi nominal lebih dari 0.'; return render(); }
+    S.cart.manual = (S.cart.manual||[]).concat([{id:newId(), nama:(S.mf.nama||'').trim()||'Nominal manual', harga:j}]);
+    S.mf = {nama:'', jumlah:''}; S.mErr=''; render();
+  },
+  'm-hapus':function(d){ S.cart.manual = (S.cart.manual||[]).filter(function(m){ return m.id!==d.id; }); render(); },
+  pasang:pasangApp,
   login:doLogin,
   keluar:doLogout,
   'q-tambah':tambahAntrean,
@@ -1122,6 +1167,11 @@ app.addEventListener('click',function(e){
 app.addEventListener('input',function(e){
   var el = e.target, k = el.dataset.in;
   if(el.dataset.form){ S.form[el.dataset.form]=el.value; return; }
+  if(el.dataset.m){
+    if(el.dataset.m==='jumlah'){ S.mf.jumlah=el.value.replace(/\D/g,'').slice(0,9); S.mErr=''; render(); }
+    else { S.mf.nama=el.value; }
+    return;
+  }
   if(el.dataset.q){ S.qf[el.dataset.q]=el.value; return; }
   if(el.dataset.ex){
     var kx = el.dataset.ex;
@@ -1150,6 +1200,7 @@ function route(){
   render();
 }
 window.addEventListener('hashchange',route);
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){ window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); }); }
 
 function init(){
   var cfg = window.FIREBASE_CONFIG || {};
