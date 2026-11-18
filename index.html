@@ -265,7 +265,7 @@ var S = {
   cart:{items:{}, hargaIn:{}, memberId:null, kapster:KAPSTER[0], metode:'tunai', tukar:0, bayar:''},
   mq:'', ml:'', cek:'', range:'hari',
   role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
-  q:[], qDate:dayKey(new Date()), qf:{nama:'', hp:'', kapster:'', ket:'', jam:''}, qErr:'',
+  qKap:'', q:[], qDate:dayKey(new Date()), qf:{nama:'', hp:'', kapster:'', ket:'', jam:''}, qErr:'',
   modal:null, form:{}, formErr:'', exErr:'', saving:false, focusModal:false
 };
 var db = null;
@@ -666,6 +666,8 @@ function qKey(x){ return x.jam ? x.tgl+'T'+x.jam : x.at; }
 function viewAntrean(){
   var f = S.qf, list = (S.role==='admin'?S.q:S.pub).filter(function(x){ return x.tgl===S.qDate; })
     .sort(function(a,b){ return qKey(a)<qKey(b)?-1:(qKey(a)>qKey(b)?1:0); });
+  var cust = S.role!=='admin';
+  if(cust) list = S.qKap ? list.filter(function(x){ return x.kapster===S.qKap || x.kapster===''; }) : [];
   var aktif = list.filter(function(x){ return x.status==='menunggu'||x.status==='dilayani'; });
   var tutup = list.filter(function(x){ return x.status==='selesai'||x.status==='batal'; });
   function cnt(st){ return list.filter(function(x){ return x.status===st; }).length; }
@@ -689,12 +691,18 @@ function viewAntrean(){
     '<p class="hint">Dicatat untuk tanggal '+fmtTgl(S.qDate+'T12:00:00')+'.</p>'+
     (S.qErr?'<p class="err" role="alert">'+esc(S.qErr)+'</p>':'')+
     '<div><button class="btn primary" data-act="q-tambah">Masukkan ke antrean</button></div></div>';
+  var pilih = cust ? '<div class="mt"><div class="small muted" style="margin-bottom:6px">Pilih kapster untuk melihat antrean</div><div class="chips">'+KAPSTER.map(function(k){
+    return '<button class="chip" data-act="q-kap" data-v="'+esc(k)+'" aria-pressed="'+(S.qKap===k)+'">'+esc(k)+'</button>';
+  }).join('')+'</div></div>' : '';
+  var isi = (cust && !S.qKap) ? '<div class="empty"><strong>Pilih kapster dulu</strong>Daftar antrean tampil setelah Anda memilih kapster.</div>'
+    : (aktif.length ? aktif.map(row).join('') : '<div class="empty"><strong>Tidak ada antrean aktif</strong>'+(cust?'Belum ada antrean untuk '+esc(S.qKap)+' pada tanggal ini.':'Tambahkan pelanggan di form.')+'</div>')
+      + (tutup.length ? '<h3 class="mt">Selesai &amp; batal</h3>'+tutup.map(row).join('') : '');
   var daftar = '<div class="card pad"><div class="row between wrapx"><h2>Daftar antrean</h2><label class="f" style="flex-direction:row;align-items:center;gap:8px">Tanggal<input type="date" id="q-tgl" data-in="qdate" value="'+esc(S.qDate)+'" style="width:auto"></label></div>'+
-    (aktif.length?aktif.map(row).join(''):'<div class="empty"><strong>Tidak ada antrean aktif</strong>Tambahkan pelanggan di form.</div>')+
-    (tutup.length?'<h3 class="mt">Selesai &amp; batal</h3>'+tutup.map(row).join(''):'')+'</div>';
-  return '<div class="stack"><div class="sumgrid"><div class="sum"><div class="lb">Menunggu</div><div class="vl num">'+cnt('menunggu')+'</div></div>'+
+    pilih+isi+'</div>';
+  var sg = '<div class="sumgrid"><div class="sum"><div class="lb">Menunggu</div><div class="vl num">'+cnt('menunggu')+'</div></div>'+
     '<div class="sum"><div class="lb">Dilayani</div><div class="vl num">'+cnt('dilayani')+'</div></div>'+
-    '<div class="sum"><div class="lb">Selesai</div><div class="vl num">'+cnt('selesai')+'</div></div></div>'+form+daftar+'</div>';
+    '<div class="sum"><div class="lb">Selesai</div><div class="vl num">'+cnt('selesai')+'</div></div></div>';
+  return '<div class="stack">'+(cust&&!S.qKap?'':sg)+form+daftar+'</div>';
 }
 function tambahAntrean(){
   var f = S.qf, nama = (f.nama||'').trim(), hp = f.hp ? normHp(f.hp) : '';
@@ -1088,6 +1096,7 @@ var ACTIONS = {
   },
   'konfirm-ok':konfirmOk,
   'simpan-ex':simpanEx,
+  'q-kap':function(d){ S.qKap=d.v; render(); },
   nav:function(d,el,e){ e.preventDefault(); go(d.v); },
   login:doLogin,
   keluar:doLogout,
