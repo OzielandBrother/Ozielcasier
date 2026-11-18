@@ -209,7 +209,8 @@ var CATALOG = [
   {id:'curly',        nama:'Curly',            harga:200000, jenis:'layanan', grup:'Treatment'},
   {id:'coloring', mulai:true,     nama:'Coloring Start',   harga:300000, jenis:'layanan', grup:'Treatment'},
   {id:'hairtonic',    nama:'Hair Tonic',       harga:30000,  jenis:'produk',  grup:'Produk'},
-  {id:'pomade',       nama:'Pomade',           harga:50000,  jenis:'produk',  grup:'Produk'}
+  {id:'pomade',       nama:'Pomade',           harga:50000,  jenis:'produk',  grup:'Produk'},
+  {id:'member-tahunan', nama:'Member 1 Tahun',  harga:1000000, jenis:'produk', grup:'Membership', per:'tahun'}
 ];
 var CAT = {}; CATALOG.forEach(function(c){ CAT[c.id]=c; });
 var TIERS = [
@@ -561,7 +562,7 @@ function memberPicker(k){
 }
 
 function tilePrice(c,k){
-  var base = c.mulai ? 'Mulai '+rp(c.harga) : rp(c.harga);
+  var base = (c.mulai ? 'Mulai '+rp(c.harga) : rp(c.harga)) + (c.per ? ' / '+c.per : '');
   if(c.hargaMember==null) return base;
   if(k.member) return rp(c.hargaMember)+' <span class="small muted">harga member</span>';
   return base+' <span class="small muted">· member '+rp(c.hargaMember)+'</span>';
@@ -582,7 +583,7 @@ function viewKasir(){
       '<span class="tag">'+esc(c.grup)+'</span>'+
       '<span class="nm">'+esc(c.nama)+'</span><span class="pr num">'+tilePrice(c,k)+'</span></button>';
   }).join('');
-  var chips = [['semua','Semua'],['Haircut','Haircut'],['Treatment','Treatment'],['Produk','Produk']].map(function(f){
+  var chips = [['semua','Semua'],['Haircut','Haircut'],['Treatment','Treatment'],['Produk','Produk'],['Membership','Membership']].map(function(f){
     return '<button class="chip" data-act="filter" data-v="'+f[0]+'" aria-pressed="'+(S.filter===f[0])+'">'+f[1]+'</button>';
   }).join('');
 
@@ -720,9 +721,9 @@ function myCard(){
 }
 function viewMenu(){
   var info = TIERS.filter(function(t){ return t.diskon; }).map(function(t){ return t.nama+' (belanja mulai '+rp(t.min)+') diskon '+t.diskon+'%'; }).join(', ');
-  return '<div class="stack">'+['Haircut','Treatment','Produk'].map(function(g){
+  return '<div class="stack">'+['Haircut','Treatment','Produk','Membership'].map(function(g){
     return '<div class="card pad"><h2>'+g+'</h2>'+CATALOG.filter(function(c){ return c.grup===g; }).map(function(c){
-      return '<div class="kv"><span>'+esc(c.nama)+'</span><strong class="num">'+(c.mulai?'Mulai ':'')+rp(c.harga)+(c.hargaMember!=null?' <span class="small muted">· member '+rp(c.hargaMember)+'</span>':'')+'</strong></div>';
+      return '<div class="kv"><span>'+esc(c.nama)+'</span><strong class="num">'+(c.mulai?'Mulai ':'')+rp(c.harga)+(c.per?' / '+c.per:'')+(c.hargaMember!=null?' <span class="small muted">· member '+rp(c.hargaMember)+'</span>':'')+'</strong></div>';
     }).join('')+'</div>';
   }).join('')+'<p class="hint">Member: '+info+' untuk layanan. Poin 1 per '+rp(POIN_PER)+'.</p></div>';
 }
@@ -733,8 +734,19 @@ function viewMasuk(){
     (S.authErr?'<p class="err" role="alert">'+esc(S.authErr)+'</p>':'')+
     '<button class="btn primary" data-act="login"'+(S.saving?' disabled':'')+'>Masuk</button></div>';
 }
+var WA = [{nama:'Ozi', no:'081265346601'},{nama:'Firman', no:'083874540889'}];
+function waText(w){
+  return 'Halo '+w.nama+', saya mau booking di '+SHOP+'.\n\nNama: \nLayanan: \nTanggal & jam: \nKapster (jika ada): \n\nTerima kasih.';
+}
+function waCard(){
+  return '<div class="card pad"><h2>Booking via WhatsApp</h2>'+WA.map(function(w){
+    return '<div class="kv" style="align-items:center"><span><strong>'+esc(w.nama)+'</strong> <span class="num muted">'+esc(w.no)+'</span></span>'+
+      '<a class="btn small" href="https://wa.me/62'+w.no.slice(1)+'?text='+encodeURIComponent(waText(w))+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Chat WhatsApp</a></div>';
+  }).join('')+'</div>';
+}
 function viewCust(){
   var b = S.view==='menu' ? viewMenu() : S.view==='masuk' ? viewMasuk() : '<div class="stack">'+myCard()+viewAntrean()+'</div>';
+  if(S.view!=='masuk') b = '<div class="stack">'+waCard()+b+'</div>';
   if(S.dbErr) b = '<p class="err" role="alert">Antrean tidak bisa dimuat. Periksa koneksi lalu muat ulang.</p>'+b;
   return b+'<p class="small muted" style="margin-top:28px;text-align:center"><a href="#masuk" data-act="nav" data-v="masuk" style="color:inherit">Masuk admin</a></p>';
 }
