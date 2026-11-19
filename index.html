@@ -217,6 +217,7 @@ var CATALOG = [
   {id:'coloring', mulai:true,     nama:'Coloring Start',   harga:300000, jenis:'layanan', grup:'Treatment'},
   {id:'hairtonic',    nama:'Hair Tonic',       harga:30000,  jenis:'produk',  grup:'Produk'},
   {id:'pomade',       nama:'Pomade',           harga:50000,  jenis:'produk',  grup:'Produk'},
+  {id:'pomade-mini',  nama:'Pomade Mini',      harga:30000,  jenis:'produk',  grup:'Produk'},
   {id:'member-tahunan', nama:'Member 1 Tahun',  harga:1000000, jenis:'produk', grup:'Membership', per:'tahun'}
 ];
 var CAT = {}; CATALOG.forEach(function(c){ CAT[c.id]=c; });
@@ -229,7 +230,7 @@ var POIN_PER = 1000;      // 1 poin setiap Rp 1.000 yang dibayar
 var TUKAR_POIN = 100;     // tukar per kelipatan 100 poin
 var TUKAR_NILAI = 5000;   // senilai potongan Rp 5.000
 var METODE = [{k:'tunai',n:'Tunai'},{k:'qris',n:'QRIS'},{k:'transfer',n:'Transfer'}];
-var PENGELUAR = ['Kasir Pagi','Kasir Malam'].concat(KAPSTER);
+var PENGELUAR = ['KASIR'].concat(KAPSTER);
 var KATEGORI = ['Gaji & bagi hasil','Sewa tempat','Listrik & air','Belanja produk','Peralatan','Makan & minum','Lainnya'];
 var VA = [
   {k:'kasir',    n:'Kasir'},
