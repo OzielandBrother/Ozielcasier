@@ -235,6 +235,7 @@ var KATEGORI = ['Gaji & bagi hasil','Sewa tempat','Listrik & air','Belanja produ
 var VA = [
   {k:'kasir',    n:'Kasir'},
   {k:'antrean',  n:'Antrean'},
+  {k:'libur',    n:'Libur'},
   {k:'member',   n:'Member'},
   {k:'riwayat',  n:'Riwayat'},
   {k:'pengeluaran', n:'Pengeluaran'},
@@ -272,7 +273,7 @@ var S = {
   members:{}, trx:[], exp:[], ex:{tgl:dayKey(new Date()), kategori:'Gaji & bagi hasil', oleh:'', ket:'', jumlah:''},
   cart:{items:{}, hargaIn:{}, memberId:null, kapster:KAPSTER[0], metode:'tunai', tukar:0, bayar:''},
   mq:'', ml:'', cek:'', range:'hari',
-  trxTgl:dayKey(new Date()), mf:{nama:'',jumlah:''}, mErr:'', canInstall:false, role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
+  libur:[], lf:{kapster:KAPSTER[0], mulai:dayKey(new Date()), selesai:dayKey(new Date()), ket:''}, lErr:'', trxTgl:dayKey(new Date()), mf:{nama:'',jumlah:''}, mErr:'', canInstall:false, role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
   qKap:'', q:[], qDate:dayKey(new Date()), qf:{nama:'', hp:'', kapster:'', ket:'', jam:''}, qErr:'',
   modal:null, form:{}, formErr:'', exErr:'', saving:false, focusModal:false
 };
@@ -281,8 +282,8 @@ var db = null;
 /* ---------- Penyimpanan ---------- */
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
-function loadLocal(){ S.members = lsGet('rb_members') || {}; S.trx = lsGet('rb_trx') || []; S.exp = lsGet('rb_exp') || []; S.q = lsGet('rb_q') || []; S.loading=false; }
-function persistLocal(){ lsSet('rb_members',S.members); lsSet('rb_trx',S.trx); lsSet('rb_exp',S.exp); lsSet('rb_q',S.q); }
+function loadLocal(){ S.members = lsGet('rb_members') || {}; S.trx = lsGet('rb_trx') || []; S.exp = lsGet('rb_exp') || []; S.q = lsGet('rb_q') || []; S.libur = lsGet('rb_libur') || []; S.loading=false; }
+function persistLocal(){ lsSet('rb_members',S.members); lsSet('rb_trx',S.trx); lsSet('rb_exp',S.exp); lsSet('rb_q',S.q); lsSet('rb_libur',S.libur); }
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
 function putMember(m){
@@ -311,6 +312,48 @@ function delExp(id){
 function delTrx(id){
   if(db) return db.collection('transaksi').doc(id).delete();
   S.trx = S.trx.filter(function(x){ return x.id!==id; }); persistLocal(); return Promise.resolve();
+}
+function putLibur(x){
+  var c = clone(x);
+  if(db) return tmo(db.collection('libur').doc(c.id).set(c));
+  var i = S.libur.map(function(y){ return y.id; }).indexOf(c.id);
+  if(i>-1) S.libur[i]=c; else S.libur.push(c);
+  persistLocal(); return Promise.resolve();
+}
+function delLibur(id){
+  if(db) return tmo(db.collection('libur').doc(id).delete());
+  S.libur = S.libur.filter(function(x){ return x.id!==id; }); persistLocal(); return Promise.resolve();
+}
+function liburOn(kap, tgl){
+  return S.libur.filter(function(l){ return l.kapster===kap && tgl>=l.mulai && tgl<=l.selesai; })[0] || null;
+}
+function liburRentang(l){
+  return l.mulai===l.selesai ? fmtTgl(l.mulai+'T12:00:00') : fmtTgl(l.mulai+'T12:00:00')+' – '+fmtTgl(l.selesai+'T12:00:00');
+}
+function liburInfo(){
+  var a = S.libur.filter(function(l){ return S.qDate>=l.mulai && S.qDate<=l.selesai; });
+  if(!a.length) return '';
+  return '<div class="hint" style="border-left:3px solid var(--warn);padding-left:10px"><strong>Kapster libur pada tanggal ini:</strong><br>'+
+    a.map(function(l){ return esc(l.kapster)+(l.ket?' — '+esc(l.ket):'')+(l.mulai!==l.selesai?' ('+liburRentang(l)+')':''); }).join('<br>')+'</div>';
+}
+function viewLibur(){
+  var f = S.lf, today = dayKey(new Date());
+  var aktif = S.libur.filter(function(l){ return l.selesai>=today; }).sort(function(a,b){ return a.mulai<b.mulai?-1:1; });
+  var lalu = S.libur.filter(function(l){ return l.selesai<today; }).sort(function(a,b){ return a.mulai<b.mulai?1:-1; }).slice(0,10);
+  function row(l){
+    return '<div class="kv" style="align-items:center"><span><strong>'+esc(l.kapster)+'</strong> · '+liburRentang(l)+(l.ket?'<div class="small muted">'+esc(l.ket)+'</div>':'')+'</span>'+
+      '<button class="btn small danger" data-act="l-hapus" data-id="'+esc(l.id)+'">Hapus</button></div>';
+  }
+  var form = '<div class="card pad stack"><h2>Tambah libur kapster</h2><div class="formgrid">'+
+    '<label class="f">Kapster<select id="l-kapster" data-l="kapster">'+KAPSTER.map(function(n){ return '<option'+(n===f.kapster?' selected':'')+'>'+n+'</option>'; }).join('')+'</select></label>'+
+    '<label class="f">Keterangan (opsional)<input type="text" id="l-ket" data-l="ket" value="'+esc(f.ket)+'" placeholder="Contoh: Cuti, sakit, acara keluarga" autocomplete="off"></label>'+
+    '<label class="f">Mulai tanggal<input type="date" id="l-mulai" data-l="mulai" value="'+esc(f.mulai)+'"></label>'+
+    '<label class="f">Sampai tanggal<input type="date" id="l-selesai" data-l="selesai" value="'+esc(f.selesai)+'"></label></div>'+
+    (S.lErr?'<p class="err" role="alert">'+esc(S.lErr)+'</p>':'')+
+    '<div><button class="btn primary" data-act="l-tambah"'+(S.saving?' disabled':'')+'>Simpan libur</button></div></div>';
+  var listLibur = '<div class="card pad"><h2>Libur terjadwal</h2>'+(aktif.length?aktif.map(row).join(''):'<div class="empty"><strong>Belum ada jadwal libur</strong>Tambahkan lewat form di atas.</div>')+
+    (lalu.length?'<h3 class="mt">Sudah lewat</h3>'+lalu.map(row).join(''):'')+'</div>';
+  return '<div class="stack">'+form+listLibur+'</div>';
 }
 function pubOf(c){ return {no:c.no, at:c.at, tgl:c.tgl, kapster:c.kapster, jam:c.jam, status:c.status}; }
 function rememberMine(id){ var a = lsGet('rb_mine')||[]; a.push(id); lsSet('rb_mine',a.slice(-10)); }
@@ -738,18 +781,20 @@ function viewAntrean(){
   var form = '<div class="card pad stack"><h2>Tambah antrean</h2><div class="formgrid">'+
     '<label class="f">Nama pelanggan<input type="text" id="q-nama" data-q="nama" value="'+esc(f.nama)+'" autocomplete="off"></label>'+
     '<label class="f">Nomor HP (opsional)<input type="tel" inputmode="tel" id="q-hp" data-q="hp" value="'+esc(f.hp)+'" placeholder="08xxxxxxxxxx" autocomplete="off"></label>'+
-    '<label class="f">Kapster<select id="q-kapster" data-q="kapster"><option value="">Siapa saja</option>'+KAPSTER.map(function(n){ return '<option'+(n===f.kapster?' selected':'')+'>'+n+'</option>'; }).join('')+'</select></label>'+
+    '<label class="f">Kapster<select id="q-kapster" data-q="kapster"><option value="">Siapa saja</option>'+KAPSTER.map(function(n){ return '<option value="'+n+'"'+(n===f.kapster?' selected':'')+'>'+n+(liburOn(n,S.qDate)?' (libur)':'')+'</option>'; }).join('')+'</select></label>'+
     '<label class="f">Jam booking (kosong = walk-in)<input type="time" id="q-jam" data-q="jam" value="'+esc(f.jam)+'" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:9px 11px;min-height:42px"></label></div>'+
     '<label class="f">Layanan / catatan<input type="text" id="q-ket" data-q="ket" value="'+esc(f.ket)+'" placeholder="Contoh: Haircut + Wash" autocomplete="off"></label>'+
-    '<p class="hint">Dicatat untuk tanggal '+fmtTgl(S.qDate+'T12:00:00')+'.</p>'+
+    liburInfo()+'<p class="hint">Dicatat untuk tanggal '+fmtTgl(S.qDate+'T12:00:00')+'.</p>'+
     (S.qErr?'<p class="err" role="alert">'+esc(S.qErr)+'</p>':'')+
     '<div><button class="btn primary" data-act="q-tambah">Masukkan ke antrean</button></div></div>';
   var pilih = cust ? '<div class="mt"><div class="small muted" style="margin-bottom:6px">Pilih kapster untuk melihat antrean</div><div class="chips">'+KAPSTER.map(function(k){
-    return '<button class="chip" data-act="q-kap" data-v="'+esc(k)+'" aria-pressed="'+(S.qKap===k)+'">'+esc(k)+'</button>';
+    return '<button class="chip" data-act="q-kap" data-v="'+esc(k)+'" aria-pressed="'+(S.qKap===k)+'">'+esc(k)+(liburOn(k,S.qDate)?' · libur':'')+'</button>';
   }).join('')+'</div></div>' : '';
   var isi = (cust && !S.qKap) ? '<div class="empty"><strong>Pilih kapster dulu</strong>Daftar antrean tampil setelah Anda memilih kapster.</div>'
     : (aktif.length ? aktif.map(row).join('') : '<div class="empty"><strong>Tidak ada antrean aktif</strong>'+(cust?'Belum ada antrean untuk '+esc(S.qKap)+' pada tanggal ini.':'Tambahkan pelanggan di form.')+'</div>')
       + (tutup.length ? '<h3 class="mt">Selesai &amp; batal</h3>'+tutup.map(row).join('') : '');
+  var lbK = (cust && S.qKap) ? liburOn(S.qKap, S.qDate) : null;
+  if(lbK) isi = '<div class="hint" style="border-left:3px solid var(--warn);padding-left:10px"><strong>'+esc(S.qKap)+' libur pada tanggal ini.</strong>'+(lbK.ket?' '+esc(lbK.ket):'')+'</div>'+isi;
   var daftar = '<div class="card pad"><div class="row between wrapx"><h2>Daftar antrean</h2><label class="f" style="flex-direction:row;align-items:center;gap:8px">Tanggal<input type="date" id="q-tgl" data-in="qdate" value="'+esc(S.qDate)+'" style="width:auto"></label></div>'+
     pilih+isi+'</div>';
   var sg = '<div class="sumgrid"><div class="sum"><div class="lb">Menunggu</div><div class="vl num">'+cnt('menunggu')+'</div></div>'+
@@ -761,6 +806,8 @@ function tambahAntrean(){
   var f = S.qf, nama = (f.nama||'').trim(), hp = f.hp ? normHp(f.hp) : '';
   if(!nama){ S.qErr='Isi nama pelanggan.'; return render(); }
   if(hp && !hpOk(hp)){ S.qErr='Nomor HP tidak valid. Contoh: 081234567890.'; return render(); }
+  var lb = f.kapster ? liburOn(f.kapster, S.qDate) : null;
+  if(lb){ S.qErr = f.kapster+' libur pada tanggal ini'+(lb.ket?' ('+lb.ket+')':'')+'. Pilih kapster lain atau ganti tanggal.'; return render(); }
   if(f.jam && f.kapster && (S.role==='admin'?S.q:S.pub).some(function(x){ return x.tgl===S.qDate && x.jam===f.jam && x.kapster===f.kapster && x.status!=='batal' && x.status!=='selesai'; })){
     S.qErr = f.kapster+' sudah ada booking jam '+f.jam+'.'; return render();
   }
@@ -989,7 +1036,7 @@ function render(){
     keep = {id:ae.id, s:null, e:null};
     try{ keep.s = ae.selectionStart; keep.e = ae.selectionEnd; }catch(x){}
   }
-  var body = S.role!=='admin' ? viewCust() : S.view==='member' ? viewMember() : S.view==='antrean' ? viewAntrean() : S.view==='riwayat' ? viewRiwayat() : S.view==='pengeluaran' ? viewPengeluaran() : S.view==='cek-poin' ? viewCek() : viewKasir();
+  var body = S.role!=='admin' ? viewCust() : S.view==='member' ? viewMember() : S.view==='antrean' ? viewAntrean() : S.view==='libur' ? viewLibur() : S.view==='riwayat' ? viewRiwayat() : S.view==='pengeluaran' ? viewPengeluaran() : S.view==='cek-poin' ? viewCek() : viewKasir();
   app.innerHTML = header() + importBanner() + body + modalHtml();
   if(S.focusModal){
     S.focusModal = false;
@@ -1181,6 +1228,15 @@ var ACTIONS = {
     S.mf = {nama:'', jumlah:''}; S.mErr=''; render();
   },
   'm-hapus':function(d){ S.cart.manual = (S.cart.manual||[]).filter(function(m){ return m.id!==d.id; }); render(); },
+  'l-tambah':function(){
+    var f = S.lf;
+    if(!f.mulai || !f.selesai || f.selesai<f.mulai){ S.lErr='Tanggal selesai tidak boleh sebelum tanggal mulai.'; return render(); }
+    var x = {id:newId(), kapster:f.kapster, mulai:f.mulai, selesai:f.selesai, ket:(f.ket||'').trim(), at:new Date().toISOString()};
+    S.lErr=''; S.saving=true; render();
+    putLibur(x).then(function(){ S.saving=false; S.lf.ket=''; toast('Libur '+x.kapster+' tersimpan.'); render(); })
+    .catch(function(e){ S.saving=false; S.lErr=errMsg(e); render(); });
+  },
+  'l-hapus':function(d){ delLibur(d.id).then(function(){ toast('Jadwal libur dihapus.'); render(); }).catch(function(e){ toast(errMsg(e)); }); },
   impor:importLocal,
   'impor-skip':function(){ lsSet('rb_import_skip',true); render(); },
   pasang:pasangApp,
@@ -1208,6 +1264,14 @@ app.addEventListener('click',function(e){
 app.addEventListener('input',function(e){
   var el = e.target, k = el.dataset.in;
   if(el.dataset.form){ S.form[el.dataset.form]=el.value; return; }
+  if(el.dataset.l){
+    var kl = el.dataset.l;
+    if((kl==='mulai'||kl==='selesai') && !el.value) S.lf[kl]=dayKey(new Date()); else S.lf[kl]=el.value;
+    if(kl==='mulai' && S.lf.selesai<S.lf.mulai) S.lf.selesai=S.lf.mulai;
+    S.lErr='';
+    if(kl==='mulai'||kl==='selesai') render();
+    return;
+  }
   if(el.dataset.m){
     if(el.dataset.m==='jumlah'){ S.mf.jumlah=el.value.replace(/\D/g,'').slice(0,9); S.mErr=''; render(); }
     else { S.mf.nama=el.value; }
@@ -1255,6 +1319,10 @@ function init(){
     S.pub = snap.docs.map(function(d){ var x=Object.assign({},d.data()); x.id=d.id; return x; });
     if(S.role!=='admin') S.loading=false; render();
   }, function(e){ S.dbErr=(e&&e.code)||'unavailable'; S.loading=false; render(); });
+  db.collection('libur').onSnapshot(function(snap){
+    S.libur = snap.docs.map(function(d){ var x=Object.assign({},d.data()); x.id=d.id; return x; });
+    render();
+  }, function(){});
   firebase.auth().onAuthStateChanged(function(u){
     if(!u){ firebase.auth().signInAnonymously().catch(function(){}); return; }
     if(u.isAnonymous) return;
