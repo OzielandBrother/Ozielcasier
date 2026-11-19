@@ -945,6 +945,29 @@ function modalHtml(){
 
 /* ---------- Render ---------- */
 var app = document.getElementById('app');
+function localData(){
+  var m = lsGet('rb_members')||{}, t = lsGet('rb_trx')||[], e = lsGet('rb_exp')||[], q = lsGet('rb_q')||[];
+  return {members:Object.keys(m).map(function(k){ return m[k]; }), trx:t, exp:e, q:q};
+}
+function importBanner(){
+  if(S.role!=='admin' || S.mode!=='db' || lsGet('rb_imported') || lsGet('rb_import_skip')) return '';
+  var d = localData();
+  if(!d.members.length && !d.trx.length && !d.exp.length && !d.q.length) return '';
+  return '<div class="card pad stack" style="margin-bottom:14px"><h2>Ada data lama di browser ini</h2>'+
+    '<p>'+d.members.length+' member, '+d.trx.length+' transaksi, '+d.exp.length+' pengeluaran, '+d.q.length+' antrean. Data ini belum ada di cloud.</p>'+
+    '<div class="row wrapx"><button class="btn primary" data-act="impor"'+(S.saving?' disabled':'')+'>'+(S.saving?'Memindahkan…':'Pindahkan ke cloud')+'</button>'+
+    '<button class="btn" data-act="impor-skip">Abaikan</button></div></div>';
+}
+function importLocal(){
+  var d = localData(), ops = [];
+  d.members.forEach(function(m){ if(m && m.id) ops.push(db.collection('members').doc(m.id).set(clone(m))); });
+  d.trx.forEach(function(t){ if(t && t.id) ops.push(db.collection('transaksi').doc(t.id).set(clone(t))); });
+  d.exp.forEach(function(x){ if(x && x.id) ops.push(db.collection('pengeluaran').doc(x.id).set(clone(x))); });
+  d.q.forEach(function(x){ if(x && x.id){ var c=clone(x); ops.push(db.collection('antrean').doc(c.id).set(c)); ops.push(db.collection('antrean_publik').doc(c.id).set(pubOf(c))); } });
+  S.saving=true; render();
+  Promise.all(ops).then(function(){ lsSet('rb_imported',true); S.saving=false; toast('Data lama berhasil dipindahkan ke cloud.'); render(); })
+  .catch(function(e){ S.saving=false; toast(errMsg(e)); render(); });
+}
 function render(){
   var ae = document.activeElement, keep = null;
   if(ae && ae.id && app.contains(ae)){
@@ -952,7 +975,7 @@ function render(){
     try{ keep.s = ae.selectionStart; keep.e = ae.selectionEnd; }catch(x){}
   }
   var body = S.role!=='admin' ? viewCust() : S.view==='member' ? viewMember() : S.view==='antrean' ? viewAntrean() : S.view==='riwayat' ? viewRiwayat() : S.view==='pengeluaran' ? viewPengeluaran() : S.view==='cek-poin' ? viewCek() : viewKasir();
-  app.innerHTML = header() + body + modalHtml();
+  app.innerHTML = header() + importBanner() + body + modalHtml();
   if(S.focusModal){
     S.focusModal = false;
     var f = app.querySelector('.dialog input, .dialog button.primary, .dialog button');
@@ -1143,6 +1166,8 @@ var ACTIONS = {
     S.mf = {nama:'', jumlah:''}; S.mErr=''; render();
   },
   'm-hapus':function(d){ S.cart.manual = (S.cart.manual||[]).filter(function(m){ return m.id!==d.id; }); render(); },
+  impor:importLocal,
+  'impor-skip':function(){ lsSet('rb_import_skip',true); render(); },
   pasang:pasangApp,
   login:doLogin,
   keluar:doLogout,
