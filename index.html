@@ -272,7 +272,7 @@ var S = {
   members:{}, trx:[], exp:[], ex:{tgl:dayKey(new Date()), kategori:'Gaji & bagi hasil', oleh:'', ket:'', jumlah:''},
   cart:{items:{}, hargaIn:{}, memberId:null, kapster:KAPSTER[0], metode:'tunai', tukar:0, bayar:''},
   mq:'', ml:'', cek:'', range:'hari',
-  mf:{nama:'',jumlah:''}, mErr:'', canInstall:false, role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
+  trxTgl:dayKey(new Date()), mf:{nama:'',jumlah:''}, mErr:'', canInstall:false, role:'customer', auth:{email:'',pass:''}, authErr:'', pub:[],
   qKap:'', q:[], qDate:dayKey(new Date()), qf:{nama:'', hp:'', kapster:'', ket:'', jam:''}, qErr:'',
   modal:null, form:{}, formErr:'', exErr:'', saving:false, focusModal:false
 };
@@ -411,6 +411,12 @@ function calcCart(){
   return {items:items, count:sum(items,function(i){return i.qty;}), subtotal:subtotal, member:m, tier:tier, diskon:diskon,
           maxTukar:maxTukar, tukar:tukar, potPoin:potPoin, total:total, poinDapat:poinDapat, bayar:bayar, kembali:bayar-total, invalid:invalid};
 }
+function trxDate(){
+  var now = new Date(), today = dayKey(now), t = S.trxTgl || today;
+  if(t>=today) return now;
+  var p = t.split('-');
+  return new Date(+p[0], +p[1]-1, +p[2], now.getHours(), now.getMinutes(), now.getSeconds());
+}
 function invoiceNo(d){
   var key = dayKey(d);
   var n = S.trx.filter(function(t){ return dayKey(t.at)===key; }).length + 1;
@@ -423,7 +429,7 @@ function bayarSekarang(){
   if(!k.items.length || S.saving || k.invalid) return;
   if(S.cart.metode==='tunai' && k.bayar<k.total){ toast('Uang diterima kurang dari total.'); return; }
   S.saving = true; render();
-  var now = new Date();
+  var now = trxDate();
   var t = {
     id:newId(), no:invoiceNo(now), at:now.toISOString(),
     memberId:k.member?k.member.id:null, memberNama:k.member?k.member.nama:'Umum',
@@ -439,7 +445,7 @@ function bayarSekarang(){
     m.poin = (m.poin||0) - t.poinDipakai + t.poinDapat;
     m.totalBelanja = (m.totalBelanja||0) + t.total;
     m.kunjungan = (m.kunjungan||0) + 1;
-    m.terakhir = t.at;
+    m.terakhir = (m.terakhir && m.terakhir>t.at) ? m.terakhir : t.at;
     return putMember(m);
   }).then(function(){
     var qid=S.cart.qid; S.saving=false; resetCart(); if(qid) setQ(qid,'selesai');
@@ -659,6 +665,8 @@ function viewKasir(){
   var cart = '<aside class="card pad cart stack" id="cart" aria-label="Keranjang">'+
     '<div class="row between"><h2>Keranjang</h2><button class="btn link small" data-act="kosong"'+(k.items.length?'':' disabled')+'>Kosongkan</button></div>'+
     '<label class="f">Kapster<select id="kapster" data-in="kapster">'+KAPSTER.map(function(n){ return '<option'+(n===S.cart.kapster?' selected':'')+'>'+n+'</option>'; }).join('')+'</select></label>'+
+    '<label class="f">Tanggal transaksi<input type="date" id="tgl-trx" data-in="trxtgl" value="'+esc(S.trxTgl)+'" max="'+dayKey(new Date())+'"></label>'+
+    (S.trxTgl<dayKey(new Date())?'<div class="hint"><strong>Dicatat untuk tanggal '+fmtTgl(S.trxTgl+'T12:00:00')+'.</strong> Kembalikan ke hari ini untuk transaksi baru.</div>':'')+
     (S.cart.qid?(function(){ var qq=S.q.filter(function(y){return y.id===S.cart.qid;})[0]; return qq?'<div class="hint">Dari antrean '+esc(qq.no)+' · '+esc(qq.nama)+'</div>':''; })():'')+
     '<div>'+cartItems+'</div>'+
     '<div><div class="kv"><span>Subtotal</span><span class="num">'+rp(k.subtotal)+'</span></div>'+
@@ -1217,6 +1225,7 @@ app.addEventListener('input',function(e){
   else if(k==='ml'){ S.ml=el.value; render(); }
   else if(k==='email'){ S.auth.email=el.value; }
   else if(k==='pass'){ S.auth.pass=el.value; }
+  else if(k==='trxtgl'){ S.trxTgl = el.value || dayKey(new Date()); render(); }
   else if(k==='qdate'){ if(el.value){ S.qDate=el.value; render(); } }
   else if(k==='cek'){ S.cek=el.value; render(); }
   else if(k==='kapster'){ S.cart.kapster=el.value; }
