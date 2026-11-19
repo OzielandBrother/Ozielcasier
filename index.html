@@ -287,7 +287,7 @@ function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
 function putMember(m){
   var c = clone(m);
-  if(db) return db.collection('members').doc(c.id).set(c);
+  if(db) return tmo(db.collection('members').doc(c.id).set(c));
   S.members[c.id]=c; persistLocal(); return Promise.resolve();
 }
 function delMember(id){
@@ -296,12 +296,12 @@ function delMember(id){
 }
 function putTrx(t){
   var c = clone(t);
-  if(db) return db.collection('transaksi').doc(c.id).set(c);
+  if(db) return tmo(db.collection('transaksi').doc(c.id).set(c));
   S.trx.unshift(c); persistLocal(); return Promise.resolve();
 }
 function putExp(x){
   var c = clone(x);
-  if(db) return db.collection('pengeluaran').doc(c.id).set(c);
+  if(db) return tmo(db.collection('pengeluaran').doc(c.id).set(c));
   S.exp.unshift(c); persistLocal(); return Promise.resolve();
 }
 function delExp(id){
@@ -335,13 +335,20 @@ function setQ(id,status){
   var x = S.q.filter(function(y){ return y.id===id; })[0]; if(!x) return Promise.resolve();
   var n = clone(x); n.status = status; return putQ(n);
 }
+function tmo(p){
+  return new Promise(function(res,rej){
+    var t = setTimeout(function(){ rej({code:'timeout'}); }, 15000);
+    p.then(function(v){ clearTimeout(t); res(v); }, function(e){ clearTimeout(t); rej(e); });
+  });
+}
 function errMsg(e){
   var c = e && e.code;
-  if(c==='permission-denied') return 'Tidak punya izin. Masuk sebagai admin dulu.';
+  if(c==='timeout') return 'Belum terhubung ke cloud. Cek tabel dulu, data mungkin masih menunggu terkirim, jangan langsung diulang.';
+  if(c==='permission-denied') return 'Tidak punya izin menyimpan (permission-denied). Pastikan login sebagai admin dan ID dokumen di collection admins sama dengan UID akun.';
   if(c==='invalid_argument') return 'Data tidak bisa disimpan. Akun ini perlu akses Contributor atau Editor.';
   if(c==='quota_exceeded') return 'Penyimpanan penuh. Hapus data lama lalu coba lagi.';
   if(c==='revoked') return 'Akses ke penyimpanan dicabut. Muat ulang halaman.';
-  return 'Gagal menyimpan. Periksa koneksi lalu coba lagi.';
+  return 'Gagal menyimpan ('+(c||'tanpa kode')+'). Periksa koneksi lalu coba lagi.';
 }
 
 function startDb(){
@@ -548,7 +555,7 @@ function statusPill(){
   return statusPill0()+pasang+' <button class="btn small" data-act="keluar">Keluar</button>';
 }
 function statusPill0(){
-  if(S.dbErr) return '<span class="status bad">Penyimpanan tidak bisa diakses</span>';
+  if(S.dbErr) return '<span class="status bad">Penyimpanan tidak bisa diakses ('+esc(String(S.dbErr))+')</span>';
   if(S.mode==='loading' || S.loading) return '<span class="status warn">Memuat data…</span>';
   if(S.slow) return '<span class="status warn">Belum terhubung, data mungkin belum terbaru</span>';
   if(S.mode==='db') return '<span class="status ok">Tersimpan di cloud, sama di semua perangkat</span>';
