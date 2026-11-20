@@ -529,11 +529,12 @@ function strukText(t){
 function inRange(t){
   var d = new Date(t.at), now = new Date();
   if(S.range==='hari') return dayKey(d)===dayKey(now);
+  if(S.range==='kemarin') return dayKey(d)===dayKey(new Date(now.getFullYear(),now.getMonth(),now.getDate()-1));
   if(S.range==='7'){ var s=new Date(now.getFullYear(),now.getMonth(),now.getDate()-6); return d>=s; }
   if(S.range==='bulan') return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
   return true;
 }
-var RANGES = [{k:'hari',n:'Hari ini'},{k:'7',n:'7 hari'},{k:'bulan',n:'Bulan ini'},{k:'semua',n:'Semua'}];
+var RANGES = [{k:'hari',n:'Hari ini'},{k:'kemarin',n:'Kemarin'},{k:'7',n:'7 hari'},{k:'bulan',n:'Bulan ini'},{k:'semua',n:'Semua'}];
 function summarize(list){
   var byM={}, byK={}, byI={};
   list.forEach(function(t){
