@@ -493,7 +493,8 @@ function bayarSekarang(){
   }).then(function(){
     var qid=S.cart.qid; S.saving=false; resetCart(); if(qid) setQ(qid,'selesai');
     S.modal = {type:'struk', t:t, baru:true}; S.focusModal=true;
-    toast('Pembayaran tersimpan.'); render();
+    showRangeFor(now);
+    toast('Pembayaran tersimpan untuk '+fmtTgl(now.toISOString())+'.'); render();
   }).catch(function(e){
     S.saving=false; toast(errMsg(e)); render();
   });
@@ -526,6 +527,16 @@ function strukText(t){
 }
 
 /* ---------- Riwayat ---------- */
+function showRangeFor(d){
+  /* Supaya data tanggal mundur langsung terlihat: pindahkan filter ke rentang yang memuatnya */
+  var cur = S.range;
+  if(cur==='semua' || inRange({at:d.toISOString()})) return;
+  var now = new Date(), diff = Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate()) - new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+  if(diff===1) S.range='kemarin';
+  else if(diff>=0 && diff<7) S.range='7';
+  else if(d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()) S.range='bulan';
+  else S.range='semua';
+}
 function inRange(t){
   var d = new Date(t.at), now = new Date();
   if(S.range==='hari') return dayKey(d)===dayKey(now);
@@ -1169,7 +1180,8 @@ function simpanEx(){
   putExp({id:newId(), at:d.toISOString(), kategori:e.kategori, oleh:(e.oleh||'').trim(), ket:(e.ket||'').trim(), jumlah:jml})
   .then(function(){
     S.saving=false; S.ex={tgl:e.tgl, kategori:e.kategori, oleh:'', ket:'', jumlah:''};
-    toast('Pengeluaran '+rp(jml)+' dicatat.'); render();
+    showRangeFor(d);
+    toast('Pengeluaran '+rp(jml)+' dicatat untuk '+fmtTgl(d.toISOString())+'.'); render();
   }).catch(function(er){ S.saving=false; S.exErr=errMsg(er); render(); });
 }
 
